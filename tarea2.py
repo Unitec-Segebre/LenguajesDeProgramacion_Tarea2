@@ -38,7 +38,34 @@ class HTTPServer_RequestHandler(BaseHTTPRequestHandler):
         coordinatesLink = coordinatesLink.replace("ADDRESS", request['origen'].replace(" ", "+"))
         print(coordinatesLink)
 
-        
+        conn = http.client.HTTPSConnection("maps.googleapis.com")
+        conn.request("GET", coordinatesLink.replace("https://maps.googleapis.com", ""))
+        res = conn.getresponse()
+
+        coordinates = json.loads(res.read())
+        coordinates = coordinates["results"][0]["geometry"]["location"]
+
+        nearMeLink = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=LAT,LNG&radius=3000&types=food&name=cruise&key=AIzaSyCx14BVgeJ89yixorOA7gaab-uscUWlNFU"
+        Lat = str(coordinates['lat'])
+        Lng = str(coordinates['lng'])
+        nearMeLink = nearMeLink.replace("LAT", Lat)
+        nearMeLink = nearMeLink.replace("LNG", Lng)
+        print(nearMeLink)
+
+        conn.request("GET", nearMeLink.replace("https://maps.googleapis.com", ""))
+        res = conn.getresponse()
+
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        restaurants = json.loads(res.read())
+        restaurants = restaurants["results"]
+        response = collections.defaultdict(list)
+        for restaurant in restaurants:
+          response["restaurantes"].append({"nombre": restaurant["name"], "lat": restaurant["geometry"]["location"]["lat"], "lon": restaurant["geometry"]["location"]["lng"]})
+        self.wfile.write(str.encode(json.dumps(response)))
+        return
+
       else:
         self.send_response(500)
         self.send_header("Content-type", "application/json")
