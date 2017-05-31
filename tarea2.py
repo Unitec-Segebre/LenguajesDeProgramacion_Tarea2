@@ -109,7 +109,6 @@ class HTTPServer_RequestHandler(BaseHTTPRequestHandler):
           for j in range(0, decodedImgWidth):
             pos = decodedImgPixelArray+(i*decodedImgWidth*4)+(j*4)  # There are 4 bytes in each pixel
             greyPixel = ((decodedImg[pos]) + (decodedImg[pos+1]) + (decodedImg[pos+2]))//3
-            # print(greyPixel)
             decodedImg[pos] = greyPixel
             decodedImg[pos+1] = greyPixel
             decodedImg[pos+2] = greyPixel
@@ -121,8 +120,73 @@ class HTTPServer_RequestHandler(BaseHTTPRequestHandler):
         response['nombre'] = request['nombre'].replace(".", "(blanco y negro).")
         response['data'] = base64.b64encode(bytes(decodedImg)).decode('utf-8')
         self.wfile.write(str.encode(json.dumps(response)))
-        # print(bytes(base64.b64encode(decodedImg)))
+        return
+      elif (self.path == '/ejercicio4'):
+        decodedImg = bytearray(base64.b64decode(request["data"]))
+        decodedImgWidth = int(decodedImg[0x12])
+        decodedImgHeight = int(decodedImg[0x16])
+        decodedImgPixelArray = int(decodedImg[0x0A])
+        groupWidthBy = int(decodedImg[0x12])//request["tamaño"]["ancho"]
+        coverWidthFor = int(decodedImg[0x12])%request["tamaño"]["ancho"]
+        groupHeightBy = int(decodedImg[0x16])//request["tamaño"]["alto"]
+        coverHeightFor = int(decodedImg[0x16])%request["tamaño"]["alto"]
 
+        # resizedImg = bytearray(decodedImgPixelArray+(request["tamaño"]["ancho"]*request["tamaño"]["alto"]*4))
+        # resizedImg[:decodedImgPixelArray] = decodedImg[:decodedImgPixelArray]
+        resizedImg = decodedImg[:decodedImgPixelArray]
+
+        # MAGIC START
+        for i in range(0, request["tamaño"]["alto"]):
+          for j in range(0, request["tamaño"]["ancho"]):
+            resultB = 0
+            resultG = 0
+            resultR = 0
+            resultA = 0
+            pos = (((groupWidthBy*j)+(j if j<coverWidthFor else coverWidthFor))+(decodedImgWidth*((groupHeightBy*i)+(i if i<coverHeightFor else coverHeightFor))))*4
+            for k in range(0, groupHeightBy+(1 if i<coverHeightFor else 0)):
+              for l in range(0, groupWidthBy+(1 if j<coverWidthFor else 0)):
+                resultB += decodedImg[pos+(l*4)]
+                resultG += decodedImg[pos+(l*4)+1]
+                resultR += decodedImg[pos+(l*4)+2]
+                resultA += decodedImg[pos+(l*4)+3]
+              pos += decodedImgWidth
+            # print(resultB)
+            divisor = int((groupHeightBy+(1 if i<coverHeightFor else 0))*(groupWidthBy+(1 if j<coverWidthFor else 0)))
+            # resizedImg[decodedImgPixelArray+i*j*4] = (resultB//divisor)
+            # resizedImg[decodedImgPixelArray+i*j*4+1] = (resultG//divisor)
+            # resizedImg[decodedImgPixelArray+i*j*4+2] = (resultR//divisor)
+            # resizedImg[decodedImgPixelArray+i*j*4+3] = (resultA//divisor)
+            resizedImg.append(resultB//divisor)
+            resizedImg.append(resultG//divisor)
+            resizedImg.append(resultR//divisor)
+            resizedImg.append(resultA//divisor)
+        # MAGIC END
+
+        resizedImg[0x02] = (len(resizedImg))&0xFF
+        resizedImg[0x03] = ((len(resizedImg))>>8)&0xFF
+        resizedImg[0x04] = ((len(resizedImg))>>16)&0xFF
+        resizedImg[0x05] = (len(resizedImg))>>24
+        resizedImg[0x12] = (request["tamaño"]["ancho"])&0xFF
+        resizedImg[0x13] = ((request["tamaño"]["ancho"])>>8)&0xFF
+        resizedImg[0x14] = ((request["tamaño"]["ancho"])>>16)&0xFF
+        resizedImg[0x15] = (request["tamaño"]["ancho"])>>24
+        resizedImg[0x16] = (request["tamaño"]["alto"])&0xFF
+        resizedImg[0x17] = ((request["tamaño"]["alto"])>>8)&0xFF
+        resizedImg[0x18] = ((request["tamaño"]["alto"])>>16)&0xFF
+        resizedImg[0x19] = (request["tamaño"]["alto"])>>24
+        resizedImg[0x22] = (len(resizedImg)-decodedImgPixelArray)&0xFF
+        resizedImg[0x23] = ((len(resizedImg)-decodedImgPixelArray)>>8)&0xFF
+        resizedImg[0x24] = ((len(resizedImg)-decodedImgPixelArray)>>16)&0xFF
+        resizedImg[0x25] = (len(resizedImg)-decodedImgPixelArray)>>24
+
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        response = collections.defaultdict(list)
+        response['nombre'] = request['nombre'].replace(".", "(blanco y negro).")
+        response['data'] = base64.b64encode(bytes(resizedImg)).decode('utf-8')
+        self.wfile.write(str.encode(json.dumps(response)))
+        return
 
       else:
         self.send_response(500)
@@ -150,7 +214,7 @@ class HTTPServer_RequestHandler(BaseHTTPRequestHandler):
 def startServer():
   print('Starting server...')
 
-  server_address = ('localhost', 8080)
+  server_address = ('0.0.0.0', 8080)
   httpd = HTTPServer(server_address, HTTPServer_RequestHandler)
   print('Server up!')
   httpd.serve_forever()
