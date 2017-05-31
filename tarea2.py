@@ -131,8 +131,9 @@ class HTTPServer_RequestHandler(BaseHTTPRequestHandler):
         groupHeightBy = int(decodedImg[0x16])//request["tamaño"]["alto"]
         coverHeightFor = int(decodedImg[0x16])%request["tamaño"]["alto"]
 
-        # resizedImg = bytearray(decodedImgPixelArray+(request["tamaño"]["ancho"]*request["tamaño"]["alto"]*4))
+        resizedImg = bytearray(decodedImgPixelArray+(request["tamaño"]["ancho"]*request["tamaño"]["alto"]*4))
         # resizedImg[:decodedImgPixelArray] = decodedImg[:decodedImgPixelArray]
+        # resizedImg[decodedImgPixelArray:int(decodedImgPixelArray+(request["tamaño"]["ancho"]*request["tamaño"]["alto"]*4))] = [0] * int(decodedImgPixelArray+(request["tamaño"]["ancho"]*request["tamaño"]["alto"]*4))
         resizedImg = decodedImg[:decodedImgPixelArray]
 
         # MAGIC START
@@ -142,24 +143,24 @@ class HTTPServer_RequestHandler(BaseHTTPRequestHandler):
             resultG = 0
             resultR = 0
             resultA = 0
-            pos = (((groupWidthBy*j)+(j if j<coverWidthFor else coverWidthFor))+(decodedImgWidth*((groupHeightBy*i)+(i if i<coverHeightFor else coverHeightFor))))*4
-            for k in range(0, groupHeightBy+(1 if i<coverHeightFor else 0)):
-              for l in range(0, groupWidthBy+(1 if j<coverWidthFor else 0)):
-                resultB += decodedImg[pos+(l*4)]
-                resultG += decodedImg[pos+(l*4)+1]
-                resultR += decodedImg[pos+(l*4)+2]
-                resultA += decodedImg[pos+(l*4)+3]
-              pos += decodedImgWidth
+            pos = decodedImgPixelArray+(((groupWidthBy*j)+(j if j<coverWidthFor else coverWidthFor))+(decodedImgWidth*((groupHeightBy*i)+(i if i<coverHeightFor else coverHeightFor))))*4
+            # for k in range(0, groupHeightBy+(1 if i<coverHeightFor else 0)):
+            #   for l in range(0, groupWidthBy+(1 if j<coverWidthFor else 0)):
+            #     resultB += decodedImg[pos+(l*4)]
+            #     resultG += decodedImg[pos+(l*4)+1]
+            #     resultR += decodedImg[pos+(l*4)+2]
+            #     resultA += decodedImg[pos+(l*4)+3]
+            #   pos += decodedImgWidth
             # print(resultB)
             divisor = int((groupHeightBy+(1 if i<coverHeightFor else 0))*(groupWidthBy+(1 if j<coverWidthFor else 0)))
-            # resizedImg[decodedImgPixelArray+i*j*4] = (resultB//divisor)
-            # resizedImg[decodedImgPixelArray+i*j*4+1] = (resultG//divisor)
-            # resizedImg[decodedImgPixelArray+i*j*4+2] = (resultR//divisor)
-            # resizedImg[decodedImgPixelArray+i*j*4+3] = (resultA//divisor)
-            resizedImg.append(resultB//divisor)
-            resizedImg.append(resultG//divisor)
-            resizedImg.append(resultR//divisor)
-            resizedImg.append(resultA//divisor)
+            # resizedImg[decodedImgPixelArray+(i*request["tamaño"]["ancho"]+j)*4] = (resultB//divisor)
+            # resizedImg[decodedImgPixelArray+(i*request["tamaño"]["ancho"]+j)*4+1] = (resultG//divisor)
+            # resizedImg[decodedImgPixelArray+(i*request["tamaño"]["ancho"]+j)*4+2] = (resultR//divisor)
+            # resizedImg[decodedImgPixelArray+(i*request["tamaño"]["ancho"]+j)*4+3] = (resultA//divisor)
+            resizedImg.append(decodedImg[pos])#resultB//divisor)
+            resizedImg.append(decodedImg[pos+1])#resultG//divisor)
+            resizedImg.append(decodedImg[pos+2])#resultR//divisor)
+            resizedImg.append(decodedImg[pos+3])#resultA//divisor)
         # MAGIC END
 
         resizedImg[0x02] = (len(resizedImg))&0xFF
@@ -179,11 +180,13 @@ class HTTPServer_RequestHandler(BaseHTTPRequestHandler):
         resizedImg[0x24] = ((len(resizedImg)-decodedImgPixelArray)>>16)&0xFF
         resizedImg[0x25] = (len(resizedImg)-decodedImgPixelArray)>>24
 
+        print("Length: %d\nStart: %d\n" % (len(resizedImg), int(decodedImgPixelArray)))
+
         self.send_response(200)
         self.send_header("Content-type", "application/json")
         self.end_headers()
         response = collections.defaultdict(list)
-        response['nombre'] = request['nombre'].replace(".", "(blanco y negro).")
+        response['nombre'] = request['nombre'].replace(".", "(reducida).")
         response['data'] = base64.b64encode(bytes(resizedImg)).decode('utf-8')
         self.wfile.write(str.encode(json.dumps(response)))
         return
